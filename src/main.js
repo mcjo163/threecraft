@@ -5,6 +5,7 @@
 "use strict";
 import * as THREE from "../build/three.module.js";
 import * as Utils from "./utils.js";
+import { BLOCKS } from "./blocks.js";
 
 let inputs = {
   left: false,
@@ -14,11 +15,10 @@ let inputs = {
 };
 
 let canvasFocused = false;
+let w, h;
 
 /** @type {HTMLCanvasElement} */
 let canvas;
-
-let w, h;
 
 /** @type {HTMLCanvasElement} */
 let hudCanvas;
@@ -44,6 +44,15 @@ let hudTexture;
 /** @type {THREE.WebGLRenderer} */
 let renderer;
 
+/** @type {THREE.Raycaster} */
+let raycaster;
+
+/** @type {THREE.Object3D[]} */
+const objects = [];
+
+/** @type {THREE.Mesh} */
+let floor;
+
 init();
 animate();
 
@@ -52,10 +61,9 @@ animate();
  */
 function init() {
   canvas = document.querySelector("#c");
-  canvas.onclick = () => canvas.requestPointerLock();
 
   camera = new THREE.PerspectiveCamera(80, 16 / 9, 1, 10000);
-  camera.position.y = 20;
+  camera.position.y = 18;
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87ceeb);
@@ -63,16 +71,26 @@ function init() {
   const grid = new THREE.GridHelper(400, 40);
   scene.add(grid);
 
+  const geo = new THREE.PlaneGeometry(400, 400);
+  geo.rotateX(-Math.PI / 2);
+  floor = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({color: 0x7ec850}));
+  scene.add(floor);
+  objects.push(floor);
+
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   [w, h] = Utils.getMaximalBounds(window.innerWidth, window.innerHeight);
   renderer.autoClear = false;
   renderer.setSize(w, h);
 
+  raycaster = new THREE.Raycaster();
+  raycaster.far = 60;
+
   resetHud();
 
   // attach event handlers
   window.addEventListener("resize", onresize);
+  canvas.addEventListener("click", canvas.requestPointerLock);
   document.addEventListener("pointerlockchange", onpointerlockchange);
 }
 
@@ -156,8 +174,8 @@ function process() {
   );
 
   // set desired xz-velocity
-  velocity.x = inputVector.x * 0.5;
-  velocity.z = inputVector.y * 0.5;
+  velocity.x = inputVector.x * 0.4;
+  velocity.z = inputVector.y * 0.4;
 
   camera.position.add(velocity);
 }
@@ -228,13 +246,23 @@ function onkeyup(e) {
  */
 function onpointerlockchange() {
   if (document.pointerLockElement === canvas) {
+    // set focus state, remove click handler
     canvasFocused = true;
+    canvas.removeEventListener("click", canvas.requestPointerLock);
+
+    // attach input handlers
     document.addEventListener("mousemove", onmousemove);
+    document.addEventListener("pointerdown", onpointerdown);
     window.addEventListener("keydown", onkeydown);
     window.addEventListener("keyup", onkeyup);
   } else {
+    // set focus state, add click handler back
     canvasFocused = false;
+    canvas.addEventListener("click", canvas.requestPointerLock);
+
+    // detach input handlers
     document.removeEventListener("mousemove", onmousemove);
+    document.removeEventListener("pointerdown", onpointerdown);
     window.removeEventListener("keydown", onkeydown);
     window.removeEventListener("keyup", onkeyup);
   }
@@ -259,4 +287,41 @@ function onmousemove(e) {
   camera.quaternion.setFromEuler(euler);
 
   render();
+}
+
+/**
+ * Places or removes a block.
+ * @param {MouseEvent} e event
+ */
+function onpointerdown(e) {
+
+  raycaster.setFromCamera(new THREE.Vector2(), camera);
+  const intersects = raycaster.intersectObjects(objects, false);
+
+  // if anything was intersected with
+  if (intersects.length) {
+    const [intersect, ..._] = intersects;
+
+    switch (e.button) {
+      case 0:
+        // left click - break block
+        if (intersect.object !== floor) {
+          scene.remove(intersect.object);
+          objects.splice(objects.indexOf(intersect.object), 1);
+        }
+        break;
+      case 2:
+        // right click - place block
+        const newBlock = BLOCKS[1].create();
+        newBlock.position.copy(intersect.point).add(intersect.face.normal);
+        newBlock.position
+          .divideScalar(10)
+          .floor()
+          .multiplyScalar(10)
+          .addScalar(5);
+        objects.push(newBlock);
+        scene.add(newBlock);
+        break;
+    }
+  }
 }
