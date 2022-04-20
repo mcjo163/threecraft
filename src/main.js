@@ -26,7 +26,7 @@ let scene;
 let renderer;
 
 init();
-render();
+animate();
 
 /**
  * Initializes the program.
@@ -52,8 +52,6 @@ function init() {
 
   // attach event handlers
   window.addEventListener("resize", onresize);
-  window.addEventListener("keydown", onkeydown);
-  window.addEventListener("keyup", onkeyup);
   document.addEventListener("pointerlockchange", onpointerlockchange);
 }
 
@@ -69,11 +67,30 @@ function render() {
  */
 function process() {
 
+  // get current directional input state
   const inputVector = new THREE.Vector2(
     inputs.right - inputs.left,
     inputs.backward - inputs.forward,
   ).normalize();
 
+  // get forward direction to base movement on
+  const cameraDir = new THREE.Vector3();
+  camera.getWorldDirection(cameraDir);
+  const forwardDir = new THREE.Vector2(cameraDir.x, cameraDir.z).normalize();
+
+  // rotate the input vector
+  inputVector.rotateAround(new THREE.Vector2, forwardDir.angle() + Math.PI / 2);
+
+  // update position
+  camera.position.x += inputVector.x;
+  camera.position.z += inputVector.y;
+}
+
+function animate() {
+  process();
+  render();
+
+  requestAnimationFrame(animate);
 }
 
 /**
@@ -130,12 +147,18 @@ function onkeyup(e) {
 }
 
 /**
- * Determines whether the game should recieve mouse input.
+ * Determines whether the game should recieve input.
  */
 function onpointerlockchange() {
-  if (document.pointerLockElement === canvas)
+  if (document.pointerLockElement === canvas) {
     document.addEventListener("mousemove", onmousemove);
-  else document.removeEventListener("mousemove", onmousemove);
+    window.addEventListener("keydown", onkeydown);
+    window.addEventListener("keyup", onkeyup);
+  } else {
+    document.removeEventListener("mousemove", onmousemove);
+    window.removeEventListener("keydown", onkeydown);
+    window.removeEventListener("keyup", onkeyup);
+  }
 }
 
 /**
@@ -150,7 +173,7 @@ function onmousemove(e) {
   euler.x -= e.movementY * Math.PI / 500;
   euler.y -= e.movementX * Math.PI / 500;
 
-  euler.x = THREE.MathUtils.clamp(euler.x, -Math.PI / 2, Math.PI / 2);
+  euler.x = THREE.MathUtils.clamp(euler.x, -Math.PI / 2 + .1, Math.PI / 2 - .1);
   camera.quaternion.setFromEuler(euler);
 
   render();
