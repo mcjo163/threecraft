@@ -13,6 +13,8 @@ let inputs = {
   backward: false,
 };
 
+let canvasFocused = false;
+
 /** @type {HTMLCanvasElement} */
 let canvas;
 
@@ -80,6 +82,7 @@ function resetHud() {
   hudCanvas = document.createElement("canvas");
   [hudCanvas.width, hudCanvas.height] = [w, h];
   hud = hudCanvas.getContext("2d");
+  hud.font = "28px consolas";
 
   hudCamera = new THREE.OrthographicCamera(-w / 2, w / 2, h / 2, -h / 2, 0, 30);
   hudScene = new THREE.Scene();
@@ -90,12 +93,41 @@ function resetHud() {
   hudScene.add(new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat));
 }
 
+function updateHud() {
+  hud.clearRect(0, 0, w, h);
+
+  // if game is playing, draw relevant HUD items
+  if (canvasFocused) {
+    // crosshair
+    hud.strokeStyle = "#efefef";
+    const chSize = h * 0.01;
+    hud.beginPath();
+    hud.moveTo(w / 2, h / 2 - chSize);
+    hud.lineTo(w / 2, h / 2 + chSize);
+    hud.stroke();
+    hud.beginPath();
+    hud.moveTo(w / 2 - chSize, h / 2);
+    hud.lineTo(w / 2 + chSize, h / 2);
+    hud.stroke();
+  }
+  // otherwise, draw "click to play" message
+  else {
+    hud.fillStyle = "rgba(0, 0, 0, 0.6)";
+    hud.fillRect(0, 0, w, h);
+    hud.fillStyle = "white";
+    let t = hud.measureText("click to play!");
+    hud.fillText("click to play!", (w - t.width) / 2, h / 3);
+  }
+
+  hudTexture.needsUpdate = true;
+}
+
 /**
  * Renders the scene.
  */
 function render() {
   renderer.render(scene, camera);
-  
+
   updateHud();
   renderer.render(hudScene, hudCamera);
 }
@@ -128,24 +160,6 @@ function process() {
   velocity.z = inputVector.y * 0.5;
 
   camera.position.add(velocity);
-}
-
-function updateHud() {
-  hud.clearRect(0, 0, w, h);
-
-  // crosshair
-  hud.strokeStyle = "#efefef"
-  const chSize = h * .01;
-  hud.beginPath();
-  hud.moveTo(w / 2, h / 2 - chSize);
-  hud.lineTo(w / 2, h / 2 + chSize);
-  hud.stroke();
-  hud.beginPath();
-  hud.moveTo(w / 2 - chSize, h / 2);
-  hud.lineTo(w / 2 + chSize, h / 2);
-  hud.stroke();
-
-  hudTexture.needsUpdate = true;
 }
 
 function animate() {
@@ -214,10 +228,12 @@ function onkeyup(e) {
  */
 function onpointerlockchange() {
   if (document.pointerLockElement === canvas) {
+    canvasFocused = true;
     document.addEventListener("mousemove", onmousemove);
     window.addEventListener("keydown", onkeydown);
     window.addEventListener("keyup", onkeyup);
   } else {
+    canvasFocused = false;
     document.removeEventListener("mousemove", onmousemove);
     window.removeEventListener("keydown", onkeydown);
     window.removeEventListener("keyup", onkeyup);
