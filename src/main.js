@@ -53,6 +53,9 @@ const objects = [];
 /** @type {THREE.Mesh} */
 let floor;
 
+/** @type {THREE.Mesh} */
+let wireframeOutline;
+
 init();
 animate();
 
@@ -68,14 +71,22 @@ function init() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87ceeb);
 
-  const grid = new THREE.GridHelper(400, 40);
-  scene.add(grid);
+  // const grid = new THREE.GridHelper(400, 40);
+  // scene.add(grid);
 
   const geo = new THREE.PlaneGeometry(400, 400);
   geo.rotateX(-Math.PI / 2);
-  floor = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({color: 0x7ec850}));
+  floor = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x397817 }));
   scene.add(floor);
   objects.push(floor);
+
+  const box = new THREE.BoxGeometry(10, 10, 10);
+  const edges = new THREE.EdgesGeometry(box);
+  wireframeOutline = new THREE.LineSegments(
+    edges,
+    new THREE.LineBasicMaterial({ color: 0xcfcfcf })
+  );
+  scene.add(wireframeOutline);
 
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
@@ -144,6 +155,7 @@ function updateHud() {
  * Renders the scene.
  */
 function render() {
+  updateWireframeOutline();
   renderer.render(scene, camera);
 
   updateHud();
@@ -185,6 +197,23 @@ function animate() {
   render();
 
   requestAnimationFrame(animate);
+}
+
+function updateWireframeOutline() {
+  raycaster.setFromCamera(new THREE.Vector2(), camera);
+  const intersects = raycaster.intersectObjects(objects, false);
+  if (intersects.length) {
+    const [intersect, ..._] = intersects;
+    wireframeOutline.position.copy(intersect.point).sub(intersect.face.normal);
+    wireframeOutline.position
+      .divideScalar(10)
+      .floor()
+      .multiplyScalar(10)
+      .addScalar(5);
+    wireframeOutline.material.visible = true;
+  } else {
+    wireframeOutline.material.visible = false;
+  }
 }
 
 /**
@@ -294,7 +323,6 @@ function onmousemove(e) {
  * @param {MouseEvent} e event
  */
 function onpointerdown(e) {
-
   raycaster.setFromCamera(new THREE.Vector2(), camera);
   const intersects = raycaster.intersectObjects(objects, false);
 
@@ -323,5 +351,7 @@ function onpointerdown(e) {
         scene.add(newBlock);
         break;
     }
+
+    render();
   }
 }
