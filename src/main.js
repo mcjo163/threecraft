@@ -16,11 +16,28 @@ let inputs = {
 /** @type {HTMLCanvasElement} */
 let canvas;
 
+let w, h;
+
+/** @type {HTMLCanvasElement} */
+let hudCanvas;
+
 /** @type {THREE.PerspectiveCamera} */
 let camera;
 
+/** @type {THREE.OrthographicCamera} */
+let hudCamera;
+
 /** @type {THREE.Scene} */
 let scene;
+
+/** @type {THREE.Scene} */
+let hudScene;
+
+/** @type {CanvasRenderingContext2D} */
+let hud;
+
+/** @type {THREE.Texture} */
+let hudTexture;
 
 /** @type {THREE.WebGLRenderer} */
 let renderer;
@@ -41,18 +58,36 @@ function init() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87ceeb);
 
-  const grid = new THREE.GridHelper(1000, 100);
+  const grid = new THREE.GridHelper(400, 40);
   scene.add(grid);
 
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setSize(
-    ...Utils.getMaximalBounds(window.innerWidth, window.innerHeight)
-  );
+  [w, h] = Utils.getMaximalBounds(window.innerWidth, window.innerHeight);
+  renderer.autoClear = false;
+  renderer.setSize(w, h);
+
+  resetHud();
 
   // attach event handlers
   window.addEventListener("resize", onresize);
   document.addEventListener("pointerlockchange", onpointerlockchange);
+}
+
+function resetHud() {
+  if (hudCanvas) hudCanvas.remove();
+
+  hudCanvas = document.createElement("canvas");
+  [hudCanvas.width, hudCanvas.height] = [w, h];
+  hud = hudCanvas.getContext("2d");
+
+  hudCamera = new THREE.OrthographicCamera(-w / 2, w / 2, h / 2, -h / 2, 0, 30);
+  hudScene = new THREE.Scene();
+  hudTexture = new THREE.Texture(hudCanvas);
+  hudTexture.needsUpdate = true;
+  const mat = new THREE.MeshBasicMaterial({ map: hudTexture });
+  mat.transparent = true;
+  hudScene.add(new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat));
 }
 
 /**
@@ -60,17 +95,21 @@ function init() {
  */
 function render() {
   renderer.render(scene, camera);
+  
+  updateHud();
+  renderer.render(hudScene, hudCamera);
 }
 
 /**
  * Processes movement and collisions.
  */
 function process() {
+  const velocity = new THREE.Vector3();
 
   // get current directional input state
   const inputVector = new THREE.Vector2(
     inputs.right - inputs.left,
-    inputs.backward - inputs.forward,
+    inputs.backward - inputs.forward
   ).normalize();
 
   // get forward direction to base movement on
@@ -79,11 +118,34 @@ function process() {
   const forwardDir = new THREE.Vector2(cameraDir.x, cameraDir.z).normalize();
 
   // rotate the input vector
-  inputVector.rotateAround(new THREE.Vector2, forwardDir.angle() + Math.PI / 2);
+  inputVector.rotateAround(
+    new THREE.Vector2(),
+    forwardDir.angle() + Math.PI / 2
+  );
 
-  // update position
-  camera.position.x += inputVector.x;
-  camera.position.z += inputVector.y;
+  // set desired xz-velocity
+  velocity.x = inputVector.x * 0.5;
+  velocity.z = inputVector.y * 0.5;
+
+  camera.position.add(velocity);
+}
+
+function updateHud() {
+  hud.clearRect(0, 0, w, h);
+
+  // crosshair
+  hud.strokeStyle = "#efefef"
+  const chSize = h * .01;
+  hud.beginPath();
+  hud.moveTo(w / 2, h / 2 - chSize);
+  hud.lineTo(w / 2, h / 2 + chSize);
+  hud.stroke();
+  hud.beginPath();
+  hud.moveTo(w / 2 - chSize, h / 2);
+  hud.lineTo(w / 2 + chSize, h / 2);
+  hud.stroke();
+
+  hudTexture.needsUpdate = true;
 }
 
 function animate() {
@@ -98,9 +160,10 @@ function animate() {
  * a 16:9 aspect ratio.
  */
 function onresize() {
-  renderer.setSize(
-    ...Utils.getMaximalBounds(window.innerWidth, window.innerHeight)
-  );
+  [w, h] = Utils.getMaximalBounds(window.innerWidth, window.innerHeight);
+  renderer.setSize(w, h);
+
+  resetHud();
   render();
 }
 
@@ -166,14 +229,17 @@ function onpointerlockchange() {
  * @param {MouseEvent} e event
  */
 function onmousemove(e) {
-
   const euler = new THREE.Euler(0, 0, 0, "YXZ");
   euler.setFromQuaternion(camera.quaternion);
-  
-  euler.x -= e.movementY * Math.PI / 500;
-  euler.y -= e.movementX * Math.PI / 500;
 
-  euler.x = THREE.MathUtils.clamp(euler.x, -Math.PI / 2 + .1, Math.PI / 2 - .1);
+  euler.x -= (e.movementY * Math.PI) / 500;
+  euler.y -= (e.movementX * Math.PI) / 500;
+
+  euler.x = THREE.MathUtils.clamp(
+    euler.x,
+    -Math.PI / 2 + 0.1,
+    Math.PI / 2 - 0.1
+  );
   camera.quaternion.setFromEuler(euler);
 
   render();
