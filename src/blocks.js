@@ -22,10 +22,13 @@ class Block {
 
   /**
    * Creates and returns a new Object3D instance of this block.
+   * @param {THREE.Vector3} position desired position
    * @returns {THREE.Mesh} the new instance
    */
-  create() {
-    return new THREE.Mesh(this.geometry, this.material);
+  create(position) {
+    const m = new THREE.Mesh(this.geometry, this.material);
+    if (position) m.position.copy(position);
+    return m;
   }
 }
 

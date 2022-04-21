@@ -27,15 +27,18 @@ export function getMaximalBounds(width, height, aspect = 16 / 9) {
 export function positionToWorldIndices(position) {
   const indices = new THREE.Vector3();
   indices.copy(position).divideScalar(10).floor().addScalar(20);
-  indices.y -= 20;
   return indices;
 }
 
+/**
+ * Converts world array indices to a point in the world.
+ * @param {THREE.Vector3} indices indices
+ * @returns {THREE.Vector3} the position
+ */
 export function worldIndicesToPosition(indices) {
 
   const position = new THREE.Vector3();
   position.copy(indices);
-  position.y += 20;
   position.addScalar(-20).multiplyScalar(10).addScalar(5);
   return position;
 }

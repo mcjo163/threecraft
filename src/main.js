@@ -6,6 +6,7 @@
 import * as THREE from "../build/three.module.js";
 import * as Utils from "./utils.js";
 import { BLOCKS } from "./blocks.js";
+import { World } from "./world.js";
 
 let inputs = {
   left: false,
@@ -50,8 +51,8 @@ let raycaster;
 /** @type {THREE.Object3D[]} */
 const objects = [];
 
-/** @type {THREE.Mesh} */
-let floor;
+/** @type {World} */
+let world;
 
 /** @type {THREE.Mesh} */
 let wireframeOutline;
@@ -71,15 +72,6 @@ function init() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87ceeb);
 
-  // const grid = new THREE.GridHelper(400, 40);
-  // scene.add(grid);
-
-  const geo = new THREE.PlaneGeometry(400, 400);
-  geo.rotateX(-Math.PI / 2);
-  floor = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x397817 }));
-  scene.add(floor);
-  objects.push(floor);
-
   const box = new THREE.BoxGeometry(10, 10, 10);
   const edges = new THREE.EdgesGeometry(box);
   wireframeOutline = new THREE.LineSegments(
@@ -97,12 +89,30 @@ function init() {
   raycaster = new THREE.Raycaster();
   raycaster.far = 60;
 
+  world = new World(scene, basicWorld());
+
   resetHud();
 
   // attach event handlers
   window.addEventListener("resize", onresize);
   canvas.addEventListener("click", canvas.requestPointerLock);
   document.addEventListener("pointerlockchange", onpointerlockchange);
+}
+
+function basicWorld() {
+  const blocks = [];
+  for (let y = 0; y < 40; y++) {
+    const layer = [];
+    for (let x = 0; x < 40; x++) {
+      const row = [];
+      for (let z = 0; z < 40; z++) {
+        row.push(y <= 19 ? 1 : 0);
+      }
+      layer.push(row);
+    }
+    blocks.push(layer);
+  }
+  return blocks;
 }
 
 function resetHud() {
@@ -186,8 +196,8 @@ function process() {
   );
 
   // set desired xz-velocity
-  velocity.x = inputVector.x * 0.4;
-  velocity.z = inputVector.y * 0.4;
+  velocity.x = inputVector.x;
+  velocity.z = inputVector.y;
 
   camera.position.add(velocity);
 }
@@ -201,7 +211,7 @@ function animate() {
 
 function updateWireframeOutline() {
   raycaster.setFromCamera(new THREE.Vector2(), camera);
-  const intersects = raycaster.intersectObjects(objects, false);
+  const intersects = raycaster.intersectObjects(world.objects(), false);
   if (intersects.length) {
     const [intersect, ..._] = intersects;
     wireframeOutline.position.copy(intersect.point).sub(intersect.face.normal);
@@ -225,7 +235,6 @@ function onresize() {
   renderer.setSize(w, h);
 
   resetHud();
-  render();
 }
 
 /**
@@ -305,8 +314,8 @@ function onmousemove(e) {
   const euler = new THREE.Euler(0, 0, 0, "YXZ");
   euler.setFromQuaternion(camera.quaternion);
 
-  euler.x -= (e.movementY * Math.PI) / 500;
-  euler.y -= (e.movementX * Math.PI) / 500;
+  euler.x -= (e.movementY * Math.PI) / 1000;
+  euler.y -= (e.movementX * Math.PI) / 1000;
 
   euler.x = THREE.MathUtils.clamp(
     euler.x,
@@ -314,8 +323,6 @@ function onmousemove(e) {
     Math.PI / 2 - 0.1
   );
   camera.quaternion.setFromEuler(euler);
-
-  render();
 }
 
 /**
@@ -324,8 +331,7 @@ function onmousemove(e) {
  */
 function onpointerdown(e) {
   raycaster.setFromCamera(new THREE.Vector2(), camera);
-  const intersects = raycaster.intersectObjects(objects, false);
-
+  const intersects = raycaster.intersectObjects(world.objects(), false);
   // if anything was intersected with
   if (intersects.length) {
     const [intersect, ..._] = intersects;
@@ -333,25 +339,12 @@ function onpointerdown(e) {
     switch (e.button) {
       case 0:
         // left click - break block
-        if (intersect.object !== floor) {
-          scene.remove(intersect.object);
-          objects.splice(objects.indexOf(intersect.object), 1);
-        }
+        world.removeBlock(intersect.point.sub(intersect.face.normal));
         break;
       case 2:
         // right click - place block
-        const newBlock = BLOCKS[1].create();
-        newBlock.position.copy(intersect.point).add(intersect.face.normal);
-        newBlock.position
-          .divideScalar(10)
-          .floor()
-          .multiplyScalar(10)
-          .addScalar(5);
-        objects.push(newBlock);
-        scene.add(newBlock);
+        world.addBlock(intersect.point.add(intersect.face.normal), 1);
         break;
     }
-
-    render();
   }
 }
