@@ -5,7 +5,6 @@
 "use strict";
 import * as THREE from "../build/three.module.js";
 import * as Utils from "./utils.js";
-import { BLOCKS } from "./blocks.js";
 import { World } from "./world.js";
 
 let inputs = {
@@ -48,9 +47,6 @@ let renderer;
 /** @type {THREE.Raycaster} */
 let raycaster;
 
-/** @type {THREE.Object3D[]} */
-const objects = [];
-
 /** @type {World} */
 let world;
 
@@ -72,6 +68,24 @@ function init() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87ceeb);
 
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  {
+    const light = new THREE.DirectionalLight(0xffffff, 0.7);
+    light.position.set(200, 300, 150);
+    light.target.position.set(0, 0, 0);
+    light.castShadow = true;
+
+    // shadow setup
+    light.shadow.mapSize.height = 4096;
+    light.shadow.mapSize.width = 4096;
+    light.shadow.camera.far = 1000;
+    light.shadow.camera.right = 300;
+    light.shadow.camera.left = -300;
+    light.shadow.camera.top = 300;
+    light.shadow.camera.bottom = -300;
+    scene.add(light);
+  }
+
   const box = new THREE.BoxGeometry(10, 10, 10);
   const edges = new THREE.EdgesGeometry(box);
   wireframeOutline = new THREE.LineSegments(
@@ -85,6 +99,7 @@ function init() {
   [w, h] = Utils.getMaximalBounds(window.innerWidth, window.innerHeight);
   renderer.autoClear = false;
   renderer.setSize(w, h);
+  renderer.shadowMap.enabled = true;
 
   raycaster = new THREE.Raycaster();
   raycaster.far = 60;
@@ -127,7 +142,9 @@ function resetHud() {
   hudScene = new THREE.Scene();
   hudTexture = new THREE.Texture(hudCanvas);
   hudTexture.needsUpdate = true;
-  const mat = new THREE.MeshBasicMaterial({ map: hudTexture });
+  const mat = new THREE.MeshBasicMaterial({
+    map: hudTexture,
+  });
   mat.transparent = true;
   hudScene.add(new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat));
 }
@@ -196,8 +213,8 @@ function process() {
   );
 
   // set desired xz-velocity
-  velocity.x = inputVector.x;
-  velocity.z = inputVector.y;
+  velocity.x = inputVector.x * 0.6;
+  velocity.z = inputVector.y * 0.6;
 
   camera.position.add(velocity);
 }
@@ -211,15 +228,13 @@ function animate() {
 
 function updateWireframeOutline() {
   raycaster.setFromCamera(new THREE.Vector2(), camera);
-  const intersects = raycaster.intersectObjects(world.objects(), false);
+  const intersects = raycaster.intersectObjects(
+    world.nearby(camera.position, 6),
+    false
+  );
   if (intersects.length) {
     const [intersect, ..._] = intersects;
-    wireframeOutline.position.copy(intersect.point).sub(intersect.face.normal);
-    wireframeOutline.position
-      .divideScalar(10)
-      .floor()
-      .multiplyScalar(10)
-      .addScalar(5);
+    wireframeOutline.position.copy(intersect.object.position);
     wireframeOutline.material.visible = true;
   } else {
     wireframeOutline.material.visible = false;
@@ -319,8 +334,8 @@ function onmousemove(e) {
 
   euler.x = THREE.MathUtils.clamp(
     euler.x,
-    -Math.PI / 2 + 0.1,
-    Math.PI / 2 - 0.1
+    -Math.PI / 2 + 0.01,
+    Math.PI / 2 - 0.01
   );
   camera.quaternion.setFromEuler(euler);
 }
@@ -331,7 +346,10 @@ function onmousemove(e) {
  */
 function onpointerdown(e) {
   raycaster.setFromCamera(new THREE.Vector2(), camera);
-  const intersects = raycaster.intersectObjects(world.objects(), false);
+  const intersects = raycaster.intersectObjects(
+    world.nearby(camera.position, 6),
+    false
+  );
   // if anything was intersected with
   if (intersects.length) {
     const [intersect, ..._] = intersects;
@@ -343,7 +361,7 @@ function onpointerdown(e) {
         break;
       case 2:
         // right click - place block
-        world.addBlock(intersect.point.add(intersect.face.normal), 1);
+        world.addBlock(intersect.point.add(intersect.face.normal), 2);
         break;
     }
   }

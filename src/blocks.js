@@ -8,13 +8,15 @@ import * as THREE from "../build/three.module.js";
 const loader = new THREE.TextureLoader();
 
 class Block {
-  constructor(textureName) {
+  constructor(textureName, shiny) {
     /** @type {THREE.Texture} */
     this.texture = loader.load(`../textures/${textureName}.png`);
     this.texture.magFilter = THREE.NearestFilter;
 
-    /** @type {THREE.MeshLambertMaterial} */
-    this.material = new THREE.MeshBasicMaterial({map: this.texture});
+    /** @type {THREE.Material} */
+    this.material = new (
+      shiny ? THREE.MeshPhongMaterial : THREE.MeshLambertMaterial
+    )({ map: this.texture });
 
     /** @type {THREE.BoxGeometry} */
     this.geometry = new THREE.BoxGeometry(10, 10, 10);
@@ -27,12 +29,14 @@ class Block {
    */
   create(position) {
     const m = new THREE.Mesh(this.geometry, this.material);
+    m.receiveShadow = true;
     if (position) m.position.copy(position);
     return m;
   }
 }
 
 export const BLOCKS = [
-  undefined,
-  new Block("plank"),
+  undefined, 
+  new Block("plank", false),
+  new Block("gold", true),
 ];

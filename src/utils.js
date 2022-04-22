@@ -6,10 +6,12 @@
 import * as THREE from "../build/three.module.js";
 
 /**
- * Returns the dimensions of the largest 16:9 rectangle
- * that can fit within the given screen dimensions.
+ * Returns the dimensions of the largest rectangle
+ * with the given aspect ratio that can fit within 
+ * the given screen dimensions.
  * @param {number} width screen width
  * @param {number} height screen height
+ * @param {number} aspect screen aspect ratio
  * @returns {number[]} the bounds
  */
 export function getMaximalBounds(width, height, aspect = 16 / 9) {
@@ -36,9 +38,7 @@ export function positionToWorldIndices(position) {
  * @returns {THREE.Vector3} the position
  */
 export function worldIndicesToPosition(indices) {
-
   const position = new THREE.Vector3();
-  position.copy(indices);
-  position.addScalar(-20).multiplyScalar(10).addScalar(5);
+  position.copy(indices).addScalar(-20).multiplyScalar(10).addScalar(5);
   return position;
 }
