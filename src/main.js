@@ -53,6 +53,9 @@ let world;
 /** @type {THREE.Mesh} */
 let wireframeOutline;
 
+/** @type {number} */
+let t;
+
 init();
 animate();
 
@@ -191,8 +194,9 @@ function render() {
 
 /**
  * Processes movement and collisions.
+ * @param {number} dt 
  */
-function process() {
+function process(dt) {
   const velocity = new THREE.Vector3();
 
   // get current directional input state
@@ -213,16 +217,22 @@ function process() {
   );
 
   // set desired xz-velocity
-  velocity.x = inputVector.x * 0.6;
-  velocity.z = inputVector.y * 0.6;
+  velocity.x = inputVector.x * 0.05 * dt;
+  velocity.z = inputVector.y * 0.05 * dt;
 
   camera.position.add(velocity);
 }
 
-function animate() {
-  process();
-  render();
-
+function animate(time) {
+  if (!t) t = time;
+  const dt = time - t;
+  
+  if (dt > 1000 / 60) {
+    process(dt);
+    render();
+    t = time;
+  }
+  
   requestAnimationFrame(animate);
 }
 
