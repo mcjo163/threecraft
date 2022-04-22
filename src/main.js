@@ -12,8 +12,10 @@ let inputs = {
   right: false,
   forward: false,
   backward: false,
+  space: false,
 };
 
+let yVelocity = 0;
 let canvasFocused = false;
 let w, h;
 
@@ -46,6 +48,9 @@ let renderer;
 
 /** @type {THREE.Raycaster} */
 let raycaster;
+
+/** @type {THREE.Raycaster} */
+let playerFloorcaster;
 
 /** @type {World} */
 let world;
@@ -87,6 +92,13 @@ function init() {
     light.shadow.camera.top = 300;
     light.shadow.camera.bottom = -300;
     scene.add(light);
+
+    const sun = new THREE.Mesh(
+      new THREE.SphereGeometry(150),
+      new THREE.MeshBasicMaterial({color: 0xffffbb}),
+    );
+    sun.position.copy(light.position).multiplyScalar(10);
+    scene.add(sun);
   }
 
   const box = new THREE.BoxGeometry(10, 10, 10);
@@ -98,7 +110,7 @@ function init() {
   scene.add(wireframeOutline);
 
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(window.devicePixelRatio);
+  // renderer.setPixelRatio(window.devicePixelRatio);
   [w, h] = Utils.getMaximalBounds(window.innerWidth, window.innerHeight);
   renderer.autoClear = false;
   renderer.setSize(w, h);
@@ -106,6 +118,9 @@ function init() {
 
   raycaster = new THREE.Raycaster();
   raycaster.far = 60;
+
+  playerFloorcaster = new THREE.Raycaster();
+  playerFloorcaster.far = 18;
 
   world = new World(scene, basicWorld());
 
@@ -194,10 +209,12 @@ function render() {
 
 /**
  * Processes movement and collisions.
- * @param {number} dt 
+ * @param {number} dt
  */
 function process(dt) {
   const velocity = new THREE.Vector3();
+  // apply gravity
+  yVelocity -= 300 * dt;
 
   // get current directional input state
   const inputVector = new THREE.Vector2(
@@ -216,23 +233,48 @@ function process(dt) {
     forwardDir.angle() + Math.PI / 2
   );
 
-  // set desired xz-velocity
-  velocity.x = inputVector.x * 0.05 * dt;
-  velocity.z = inputVector.y * 0.05 * dt;
+  // set desired velocity
+  velocity.x = inputVector.x * 50 * dt;
+  velocity.y = yVelocity * dt;
+  velocity.z = inputVector.y * 50 * dt;
 
-  camera.position.add(velocity);
+  // update position, keep within world bounds
+  camera.position
+    .add(velocity)
+    .clamp(
+      new THREE.Vector3(-200, -182, -200),
+      new THREE.Vector3(200, 198, 200)
+    );
+
+  // floor collision
+  const collidables = world.nearby(camera.position, 2);
+  playerFloorcaster.set(camera.position, new THREE.Vector3(0, -1, 0));
+
+  // filter intersects to avoid detecting the weird ghost objects at the origin
+  // (make sure the intersection point is grid-aligned)... not a nice solution
+  const intersects = playerFloorcaster
+    .intersectObjects(collidables, false)
+    .filter((i) => i.point.y % 10 == 0);
+
+  if (intersects.length && yVelocity < 0) {
+    const [intersect, ..._] = intersects;
+    camera.position.copy(intersect.point).add(new THREE.Vector3(0, 18, 0));
+
+    // reset velocity or start a jump
+    yVelocity = inputs.space ? 100 : 0;
+  }
 }
 
 function animate(time) {
   if (!t) t = time;
   const dt = time - t;
-  
+
   if (dt > 1000 / 60) {
-    process(dt);
+    if (canvasFocused) process(dt / 1000);
     render();
     t = time;
   }
-  
+
   requestAnimationFrame(animate);
 }
 
@@ -280,6 +322,9 @@ function onkeydown(e) {
     case "d":
       inputs.right = true;
       break;
+    case " ":
+      inputs.space = true;
+      break;
   }
 }
 
@@ -300,6 +345,9 @@ function onkeyup(e) {
       break;
     case "d":
       inputs.right = false;
+      break;
+    case " ":
+      inputs.space = false;
       break;
   }
 }
@@ -371,7 +419,18 @@ function onpointerdown(e) {
         break;
       case 2:
         // right click - place block
-        world.addBlock(intersect.point.add(intersect.face.normal), 2);
+        // avoid placing blocks inside the currently occupied positions
+        const currentPosition = Utils.positionToWorldIndices(camera.position);
+        const blockPosition = intersect.point.add(intersect.face.normal);
+        if (
+          !currentPosition.equals(
+            Utils.positionToWorldIndices(blockPosition)
+          ) &&
+          !currentPosition
+            .add(new THREE.Vector3(0, -1, 0))
+            .equals(Utils.positionToWorldIndices(blockPosition))
+        )
+          world.addBlock(blockPosition, 2);
         break;
     }
   }
