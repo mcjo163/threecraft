@@ -14,7 +14,9 @@ class Block {
       this.texture = loader.load(`../textures/${textureName}.png`);
     } catch (e) {
 
-      this.texture = loader.load(`./textures/${textureName}.png`);
+      this.texture = loader.load(
+        `https://mcjo163.github.io/threecraft/textures/${textureName}.png`
+      );
     }
     this.texture.magFilter = THREE.NearestFilter;
 
