@@ -9,15 +9,16 @@ const loader = new THREE.TextureLoader();
 
 class Block {
   constructor(textureName, shiny) {
-    try {
+    if (document.URL.includes("github")) {
       /** @type {THREE.Texture} */
-      this.texture = loader.load(`../textures/${textureName}.png`);
-    } catch (e) {
-
       this.texture = loader.load(
         `https://mcjo163.github.io/threecraft/textures/${textureName}.png`
       );
+      
+    } else {
+      this.texture = loader.load(`../textures/${textureName}.png`);
     }
+
     this.texture.magFilter = THREE.NearestFilter;
 
     /** @type {THREE.Material} */
