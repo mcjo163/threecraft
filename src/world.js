@@ -175,7 +175,7 @@ export class World {
         })
       );
       this.mesh.castShadow = true;
-      this.mesh.position.sub(new THREE.Vector3(200, 200, 200))
+      this.mesh.position.sub(new THREE.Vector3(200, 200, 200));
       this.mesh.scale.set(10, 10, 10);
       this.scene.add(this.mesh);
     }
@@ -191,6 +191,37 @@ export class World {
       new THREE.BufferAttribute(new Float32Array(normals), 3)
     ).needsUpdate = true;
     this.mesh.geometry.setIndex(indices);
+  }
+
+  /**
+   * Gets a list of Box2D objects representing collidable blocks.
+   * @param {THREE.Vector3} position head position
+   * @returns {Utils.Box2D[]} boxes of nearby blocks
+   */
+  getCollisionMask(position) {
+    const i = Utils.positionToWorldIndices(position);
+    const mask = [];
+    for (const _x of [-1, 0, 1]) {
+      for (const _z of [-1, 0, 1]) {
+        // basically, include the block in the mask if it is possible
+        // for the player to collide with it (needs to include 2 or
+        // 3 world layers depending on the y-value of the player)
+        if (
+          this.isInWorld(new THREE.Vector3(i.x + _x, i.y, i.z + _z)) &&
+          (this.blockdata[i.y][i.x + _x][i.z + _z].block ||
+            this.blockdata[i.y - 1][i.x + _x][i.z + _z].block ||
+            (THREE.MathUtils.euclideanModulo(position.y, 10) < 8
+              ? this.blockdata[i.y - 2][i.x + _x][i.z + _z].block
+              : false))
+        ) {
+          const p = Utils.worldIndicesToPosition(
+            new THREE.Vector3(i.x + _x, i.y, i.z + _z)
+          );
+          mask.push(new Utils.Box2D(new THREE.Vector2(p.x, p.z), 10));
+        }
+      }
+    }
+    return mask;
   }
 
   /**

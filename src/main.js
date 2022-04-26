@@ -4,6 +4,7 @@
  */
 "use strict";
 import * as THREE from "../build/three.module.js";
+import { BLOCKS } from "./blocks.js";
 import * as Utils from "./utils.js";
 import { World } from "./world.js";
 
@@ -18,6 +19,7 @@ let inputs = {
 let yVelocity = 0;
 let canvasFocused = false;
 let w, h;
+let selectedBlock = 1;
 
 /** @type {HTMLCanvasElement} */
 let canvas;
@@ -61,6 +63,9 @@ let wireframeOutline;
 /** @type {number} */
 let t;
 
+/** @type {THREE.Mesh[]} */
+let hudItems;
+
 init();
 animate();
 
@@ -95,7 +100,7 @@ function init() {
 
     const sun = new THREE.Mesh(
       new THREE.SphereGeometry(150),
-      new THREE.MeshBasicMaterial({color: 0xffffbb}),
+      new THREE.MeshBasicMaterial({ color: 0xffffbb })
     );
     sun.position.copy(light.position).multiplyScalar(10);
     scene.add(sun);
@@ -156,7 +161,14 @@ function resetHud() {
   hud = hudCanvas.getContext("2d");
   hud.font = "28px consolas";
 
-  hudCamera = new THREE.OrthographicCamera(-w / 2, w / 2, h / 2, -h / 2, 0, 30);
+  hudCamera = new THREE.OrthographicCamera(
+    -w / 2,
+    w / 2,
+    h / 2,
+    -h / 2,
+    0,
+    300
+  );
   hudScene = new THREE.Scene();
   hudTexture = new THREE.Texture(hudCanvas);
   hudTexture.needsUpdate = true;
@@ -164,10 +176,37 @@ function resetHud() {
     map: hudTexture,
   });
   mat.transparent = true;
-  hudScene.add(new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat));
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  hudScene.add(m);
+
+  {
+    const light = new THREE.DirectionalLight(0xffffff, 1.0);
+    light.position.set(100, 100, 100);
+    light.target.position.set(0, 0, 0);
+    hudScene.add(light);
+    hudScene.add(new THREE.AmbientLight(0xffffff, 0.5));
+  }
+
+  let i = w / 20;
+  hudItems = [undefined];
+  for (const b of BLOCKS)
+    if (b) {
+      const item = b.createHudItem();
+      item.position.z = -150;
+      b === BLOCKS[selectedBlock]
+        ? item.scale.set(w / 300, w / 300, w / 300)
+        : item.scale.set(w / 400, w / 400, w / 400);
+      item.rotation.x = Math.PI / 6;
+      item.rotation.y = Math.PI / 4;
+      item.position.y = h / 2 - w / 20;
+      item.position.x = -w / 2 + i;
+      i += w / 20;
+      hudScene.add(item);
+      hudItems.push(item);
+    }
 }
 
-function updateHud() {
+function updateHud(dt) {
   hud.clearRect(0, 0, w, h);
 
   // if game is playing, draw relevant HUD items
@@ -183,6 +222,9 @@ function updateHud() {
     hud.moveTo(w / 2 - chSize, h / 2);
     hud.lineTo(w / 2 + chSize, h / 2);
     hud.stroke();
+
+    // spin the currently selected block's HUD item
+    hudItems[selectedBlock].rotation.y += (Math.PI / 2) * dt;
   }
   // otherwise, draw "click to play" message
   else {
@@ -198,12 +240,13 @@ function updateHud() {
 
 /**
  * Renders the scene.
+ * @param {number} dt
  */
-function render() {
+function render(dt) {
   updateWireframeOutline();
   renderer.render(scene, camera);
 
-  updateHud();
+  updateHud(dt);
   renderer.render(hudScene, hudCamera);
 }
 
@@ -213,6 +256,7 @@ function render() {
  */
 function process(dt) {
   const velocity = new THREE.Vector3();
+
   // apply gravity
   yVelocity -= 300 * dt;
 
@@ -238,9 +282,67 @@ function process(dt) {
   velocity.y = yVelocity * dt;
   velocity.z = inputVector.y * 50 * dt;
 
+  // wall collisions
+  const boxes = world.getCollisionMask(camera.position);
+  const playerBox = new Utils.Box2D(
+    new THREE.Vector2(camera.position.x, camera.position.z),
+    6
+  );
+
+  let collided = false;
+
+  // x-collisions
+  let b = playerBox.collideList(boxes, velocity.x, 0);
+  if (b) {
+    // player would enter a block this frame. snap x value to
+    // the side of the box.
+    if (velocity.x) {
+      velocity.x > 0
+        ? (camera.position.x = b.left - playerBox.width / 2)
+        : (camera.position.x = b.right + playerBox.width / 2);
+      collided = true;
+    }
+  } else {
+    camera.position.x += velocity.x;
+  }
+
+  // z-collisions
+  b = playerBox.collideList(boxes, 0, velocity.z);
+  if (b) {
+    // player would enter a block this frame. snap x value to
+    // the side of the box.
+    if (velocity.z) {
+      velocity.z > 0
+        ? (camera.position.z = b.bottom - playerBox.height / 2)
+        : (camera.position.z = b.top + playerBox.height / 2);
+      collided = true;
+    }
+  } else {
+    camera.position.z += velocity.z;
+  }
+
+  // x-z diagonal collisions
+  b = playerBox.collideList(boxes, velocity.x, velocity.z);
+  if (b && !collided) {
+    // player would enter a block this frame. snap x value to
+    // the side of the box.
+    if (velocity.x && velocity.z) {
+      camera.position.x =
+        velocity.x > 0
+          ? b.left - playerBox.width / 2
+          : b.right + playerBox.width / 2;
+
+      camera.position.z =
+        velocity.z > 0
+          ? b.bottom - playerBox.height / 2
+          : b.top + playerBox.height / 2;
+    }
+  }
+
+  camera.position.y += velocity.y;
   // update position, keep within world bounds
   camera.position
-    .add(velocity)
+    // .add(velocity)
     .clamp(
       new THREE.Vector3(-200, -182, -200),
       new THREE.Vector3(200, 198, 200)
@@ -248,20 +350,70 @@ function process(dt) {
 
   // floor collision
   const collidables = world.nearby(camera.position, 2);
-  playerFloorcaster.set(camera.position, new THREE.Vector3(0, -1, 0));
+
+  // check four corners of player's collision area
+  // . x
+  // . .
+  playerFloorcaster.set(
+    new THREE.Vector3().addVectors(
+      camera.position,
+      new THREE.Vector3(2.99, 0, 2.99)
+    ),
+    new THREE.Vector3(0, -1, 0)
+  );
+  let intersects = playerFloorcaster.intersectObjects(collidables, false);
+
+  // x .
+  // . .
+  playerFloorcaster.set(
+    new THREE.Vector3().addVectors(
+      camera.position,
+      new THREE.Vector3(-2.99, 0, 2.99)
+    ),
+    new THREE.Vector3(0, -1, 0)
+  );
+  intersects.push(...playerFloorcaster.intersectObjects(collidables, false));
+
+  // . .
+  // . x
+  playerFloorcaster.set(
+    new THREE.Vector3().addVectors(
+      camera.position,
+      new THREE.Vector3(2.99, 0, -2.99)
+    ),
+    new THREE.Vector3(0, -1, 0)
+  );
+  intersects.push(...playerFloorcaster.intersectObjects(collidables, false));
+
+  // . .
+  // x .
+  playerFloorcaster.set(
+    new THREE.Vector3().addVectors(
+      camera.position,
+      new THREE.Vector3(-2.99, 0, -2.99)
+    ),
+    new THREE.Vector3(0, -1, 0)
+  );
+  intersects.push(...playerFloorcaster.intersectObjects(collidables, false));
 
   // filter intersects to avoid detecting the weird ghost objects at the origin
   // (make sure the intersection point is grid-aligned)... not a nice solution
-  const intersects = playerFloorcaster
-    .intersectObjects(collidables, false)
-    .filter((i) => i.point.y % 10 == 0);
+  intersects = [...intersects].filter((i) => i.point.y % 10 == 0);
 
   if (intersects.length && yVelocity < 0) {
-    const [intersect, ..._] = intersects;
-    camera.position.copy(intersect.point).add(new THREE.Vector3(0, 18, 0));
+    const dist = Math.min(...intersects.map((i) => i.distance));
+    camera.position.add(new THREE.Vector3(0, 18 - dist, 0));
 
     // reset velocity or start a jump
-    yVelocity = inputs.space ? 100 : 0;
+    yVelocity =
+      inputs.space &&
+      world.isEmpty(
+        Utils.positionToWorldIndices(camera.position).add(
+          new THREE.Vector3(0, 1, 0)
+        )
+      )
+        ? 85
+        : 0;
   }
 }
 
@@ -271,7 +423,7 @@ function animate(time) {
 
   if (dt > 1000 / 60) {
     if (canvasFocused) process(dt / 1000);
-    render();
+    render(dt / 1000);
     t = time;
   }
 
@@ -364,6 +516,7 @@ function onpointerlockchange() {
     // attach input handlers
     document.addEventListener("mousemove", onmousemove);
     document.addEventListener("pointerdown", onpointerdown);
+    document.addEventListener("wheel", onwheel);
     window.addEventListener("keydown", onkeydown);
     window.addEventListener("keyup", onkeyup);
   } else {
@@ -374,6 +527,7 @@ function onpointerlockchange() {
     // detach input handlers
     document.removeEventListener("mousemove", onmousemove);
     document.removeEventListener("pointerdown", onpointerdown);
+    document.removeEventListener("wheel", onwheel);
     window.removeEventListener("keydown", onkeydown);
     window.removeEventListener("keyup", onkeyup);
   }
@@ -387,8 +541,8 @@ function onmousemove(e) {
   const euler = new THREE.Euler(0, 0, 0, "YXZ");
   euler.setFromQuaternion(camera.quaternion);
 
-  euler.x -= (e.movementY * Math.PI) / 1000;
-  euler.y -= (e.movementX * Math.PI) / 1000;
+  euler.x -= (e.movementY * Math.PI) / 2400;
+  euler.y -= (e.movementX * Math.PI) / 2400;
 
   euler.x = THREE.MathUtils.clamp(
     euler.x,
@@ -419,19 +573,42 @@ function onpointerdown(e) {
         break;
       case 2:
         // right click - place block
-        // avoid placing blocks inside the currently occupied positions
-        const currentPosition = Utils.positionToWorldIndices(camera.position);
-        const blockPosition = intersect.point.add(intersect.face.normal);
-        if (
-          !currentPosition.equals(
-            Utils.positionToWorldIndices(blockPosition)
-          ) &&
-          !currentPosition
-            .add(new THREE.Vector3(0, -1, 0))
-            .equals(Utils.positionToWorldIndices(blockPosition))
-        )
-          world.addBlock(blockPosition, 2);
+        // avoid placing blocks that would overlap the player
+        const blockPosition = Utils.snapPositionToGrid(
+          intersect.point.add(intersect.face.normal)
+        );
+        const playerBox = new Utils.Box2D(
+          new THREE.Vector2(camera.position.x, camera.position.z),
+          6
+        );
+        const box = new Utils.Box2D(
+          new THREE.Vector2(blockPosition.x, blockPosition.z),
+          10
+        );
+
+        const overlapsPlayer =
+          playerBox.collide(box) &&
+          -5 < camera.position.y - blockPosition.y &&
+          camera.position.y - blockPosition.y < 23;
+
+        if (!overlapsPlayer) world.addBlock(blockPosition, selectedBlock);
         break;
     }
   }
+}
+
+/**
+ * Changes selected block.
+ * @param {WheelEvent} e event
+ */
+function onwheel(e) {
+  const dir = e.deltaY / Math.abs(e.deltaY);
+  hudItems[selectedBlock].rotation.y = Math.PI / 4;
+  hudItems[selectedBlock].scale.set(w / 400, w / 400, w / 400);
+  selectedBlock =
+  THREE.MathUtils.euclideanModulo(
+    selectedBlock + dir - 1,
+    BLOCKS.length - 1
+    ) + 1;
+  hudItems[selectedBlock].scale.set(w / 300, w / 300, w / 300);
 }

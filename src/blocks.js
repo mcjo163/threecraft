@@ -33,10 +33,22 @@ class Block {
     if (position) m.position.copy(position);
     return m;
   }
+
+  /**
+   * Creates a mesh to render on the HUD.
+   * @returns {THREE.Mesh}
+   */
+  createHudItem() {
+    return new THREE.Mesh(this.geometry, this.material);
+  }
 }
 
 export const BLOCKS = [
-  undefined, 
+  undefined,
+  new Block("stone", false),
   new Block("plank", false),
+  new Block("cobblestone", false),
+  new Block("bricks", false),
+  new Block("iron", true),
   new Block("gold", true),
 ];
