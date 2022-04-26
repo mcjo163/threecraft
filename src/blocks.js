@@ -9,10 +9,11 @@ const loader = new THREE.TextureLoader();
 
 class Block {
   constructor(textureName, shiny) {
+    // resource location depends on where this is running...
     if (document.URL.includes("github")) {
       /** @type {THREE.Texture} */
       this.texture = loader.load(
-        `https://mcjo163.github.io/threecraft/textures/${textureName}.png`
+        `${document.URL}/textures/${textureName}.png`
       );
       
     } else {
