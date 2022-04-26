@@ -309,7 +309,7 @@ function process(dt) {
   // z-collisions
   b = playerBox.collideList(boxes, 0, velocity.z);
   if (b) {
-    // player would enter a block this frame. snap x value to
+    // player would enter a block this frame. snap z value to
     // the side of the box.
     if (velocity.z) {
       velocity.z > 0
@@ -324,14 +324,14 @@ function process(dt) {
   // x-z diagonal collisions
   b = playerBox.collideList(boxes, velocity.x, velocity.z);
   if (b && !collided) {
-    // player would enter a block this frame. snap x value to
-    // the side of the box.
-    if (velocity.x && velocity.z) {
+    // player would enter a block this frame. x and z to corner.
+    if (velocity.x) {
       camera.position.x =
         velocity.x > 0
           ? b.left - playerBox.width / 2
           : b.right + playerBox.width / 2;
-
+    }
+    if (velocity.z) {
       camera.position.z =
         velocity.z > 0
           ? b.bottom - playerBox.height / 2
