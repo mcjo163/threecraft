@@ -357,7 +357,7 @@ function process(dt) {
   playerFloorcaster.set(
     new THREE.Vector3().addVectors(
       camera.position,
-      new THREE.Vector3(2.99, 0, 2.99)
+      new THREE.Vector3(2.999999999, 0, 2.999999999)
     ),
     new THREE.Vector3(0, -1, 0)
   );
@@ -368,7 +368,7 @@ function process(dt) {
   playerFloorcaster.set(
     new THREE.Vector3().addVectors(
       camera.position,
-      new THREE.Vector3(-2.99, 0, 2.99)
+      new THREE.Vector3(-2.999999999, 0, 2.999999999)
     ),
     new THREE.Vector3(0, -1, 0)
   );
@@ -379,7 +379,7 @@ function process(dt) {
   playerFloorcaster.set(
     new THREE.Vector3().addVectors(
       camera.position,
-      new THREE.Vector3(2.99, 0, -2.99)
+      new THREE.Vector3(2.999999999, 0, -2.999999999)
     ),
     new THREE.Vector3(0, -1, 0)
   );
@@ -390,7 +390,7 @@ function process(dt) {
   playerFloorcaster.set(
     new THREE.Vector3().addVectors(
       camera.position,
-      new THREE.Vector3(-2.99, 0, -2.99)
+      new THREE.Vector3(-2.999999999, 0, -2.999999999)
     ),
     new THREE.Vector3(0, -1, 0)
   );
@@ -602,13 +602,15 @@ function onpointerdown(e) {
  * @param {WheelEvent} e event
  */
 function onwheel(e) {
-  const dir = e.deltaY / Math.abs(e.deltaY);
-  hudItems[selectedBlock].rotation.y = Math.PI / 4;
-  hudItems[selectedBlock].scale.set(w / 400, w / 400, w / 400);
-  selectedBlock =
-  THREE.MathUtils.euclideanModulo(
-    selectedBlock + dir - 1,
-    BLOCKS.length - 1
-    ) + 1;
-  hudItems[selectedBlock].scale.set(w / 300, w / 300, w / 300);
+  if (e.deltaY != 0) {
+    const dir = e.deltaY / Math.abs(e.deltaY);
+    hudItems[selectedBlock].rotation.y = Math.PI / 4;
+    hudItems[selectedBlock].scale.set(w / 400, w / 400, w / 400);
+    selectedBlock =
+    THREE.MathUtils.euclideanModulo(
+      selectedBlock + dir - 1,
+      BLOCKS.length - 1
+      ) + 1;
+    hudItems[selectedBlock].scale.set(w / 300, w / 300, w / 300);
+  }
 }

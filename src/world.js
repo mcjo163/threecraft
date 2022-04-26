@@ -210,7 +210,7 @@ export class World {
           this.isInWorld(new THREE.Vector3(i.x + _x, i.y, i.z + _z)) &&
           (this.blockdata[i.y][i.x + _x][i.z + _z].block ||
             this.blockdata[i.y - 1][i.x + _x][i.z + _z].block ||
-            (THREE.MathUtils.euclideanModulo(position.y, 10) < 8
+            (Math.round(THREE.MathUtils.euclideanModulo(position.y, 10)) < 8
               ? this.blockdata[i.y - 2][i.x + _x][i.z + _z].block
               : false))
         ) {
