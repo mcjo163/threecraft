@@ -9,8 +9,13 @@ const loader = new THREE.TextureLoader();
 
 class Block {
   constructor(textureName, shiny) {
-    /** @type {THREE.Texture} */
-    this.texture = loader.load(`../textures/${textureName}.png`);
+    try {
+      /** @type {THREE.Texture} */
+      this.texture = loader.load(`../textures/${textureName}.png`);
+    } catch (e) {
+
+      this.texture = loader.load(`./textures/${textureName}.png`);
+    }
     this.texture.magFilter = THREE.NearestFilter;
 
     /** @type {THREE.Material} */
