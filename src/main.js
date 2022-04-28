@@ -16,10 +16,12 @@ let inputs = {
   space: false,
 };
 
-let yVelocity = 0;
 let canvasFocused = false;
 let w, h;
 let selectedBlock = 1;
+
+let velocity = new THREE.Vector3();
+let inAir = false;
 
 /** @type {HTMLCanvasElement} */
 let canvas;
@@ -192,7 +194,7 @@ function resetHud() {
   for (const b of BLOCKS)
     if (b) {
       const item = b.createHudItem();
-      item.position.z = -150;
+      item.position.z = -55;
       b === BLOCKS[selectedBlock]
         ? item.scale.set(w / 300, w / 300, w / 300)
         : item.scale.set(w / 400, w / 400, w / 400);
@@ -255,10 +257,10 @@ function render(dt) {
  * @param {number} dt
  */
 function process(dt) {
-  const velocity = new THREE.Vector3();
+  // const velocity = new THREE.Vector3();
 
   // apply gravity
-  yVelocity -= 300 * dt;
+  velocity.y -= 300 * dt;
 
   // get current directional input state
   const inputVector = new THREE.Vector2(
@@ -277,72 +279,89 @@ function process(dt) {
     forwardDir.angle() + Math.PI / 2
   );
 
-  // set desired velocity
-  velocity.x = inputVector.x * 50 * dt;
-  velocity.y = yVelocity * dt;
-  velocity.z = inputVector.y * 50 * dt;
+  let newVel = new THREE.Vector2(velocity.x, velocity.z);
+  const acc = inAir ? 150 : 400;
+
+  // apply acceleration
+  if (inputVector.length()) {
+    newVel.addScaledVector(inputVector, acc * dt);
+  } else {
+    if (newVel.length() < acc * dt) newVel = new THREE.Vector2();
+    else
+      newVel.addScaledVector(
+        new THREE.Vector2().copy(newVel).normalize(),
+        -acc * dt
+      );
+  }
 
   // wall collisions
   const boxes = world.getCollisionMask(camera.position);
   const playerBox = new Utils.Box2D(
     new THREE.Vector2(camera.position.x, camera.position.z),
-    6
+    5
   );
 
   let collided = false;
 
   // x-collisions
-  let b = playerBox.collideList(boxes, velocity.x, 0);
+  let b = playerBox.collideList(boxes, newVel.x * dt, 0);
   if (b) {
     // player would enter a block this frame. snap x value to
     // the side of the box.
-    if (velocity.x) {
-      velocity.x > 0
+    if (newVel.x) {
+      newVel.x > 0
         ? (camera.position.x = b.left - playerBox.width / 2)
         : (camera.position.x = b.right + playerBox.width / 2);
       collided = true;
+      newVel.x = 0;
     }
-  } else {
-    camera.position.x += velocity.x;
   }
 
   // z-collisions
-  b = playerBox.collideList(boxes, 0, velocity.z);
+  b = playerBox.collideList(boxes, 0, newVel.y * dt);
   if (b) {
     // player would enter a block this frame. snap z value to
     // the side of the box.
-    if (velocity.z) {
-      velocity.z > 0
+    if (newVel.y) {
+      newVel.y > 0
         ? (camera.position.z = b.bottom - playerBox.height / 2)
         : (camera.position.z = b.top + playerBox.height / 2);
       collided = true;
+      newVel.y = 0;
     }
-  } else {
-    camera.position.z += velocity.z;
   }
 
   // x-z diagonal collisions
-  b = playerBox.collideList(boxes, velocity.x, velocity.z);
+  b = playerBox.collideList(boxes, newVel.x * dt, newVel.y * dt);
   if (b && !collided) {
     // player would enter a block this frame. x and z to corner.
-    if (velocity.x) {
+    if (newVel.x) {
       camera.position.x =
-        velocity.x > 0
+        newVel.x > 0
           ? b.left - playerBox.width / 2
           : b.right + playerBox.width / 2;
+      newVel.x = 0;
     }
-    if (velocity.z) {
+    if (newVel.y) {
       camera.position.z =
-        velocity.z > 0
+        newVel.y > 0
           ? b.bottom - playerBox.height / 2
           : b.top + playerBox.height / 2;
+      newVel.y = 0;
     }
   }
 
-  camera.position.y += velocity.y;
+  // cap velocity according to the dot product with the desired velocity
+  if (inputVector.length() && newVel.length())
+    newVel.clampLength(0, (50 * newVel.dot(inputVector)) / newVel.length());
+
+  // set desired velocity
+  velocity.x = newVel.x;
+  velocity.z = newVel.y;
+
   // update position, keep within world bounds
   camera.position
-    // .add(velocity)
+    .add(new THREE.Vector3().copy(velocity).multiplyScalar(dt))
     .clamp(
       new THREE.Vector3(-200, -182, -200),
       new THREE.Vector3(200, 198, 200)
@@ -357,7 +376,7 @@ function process(dt) {
   playerFloorcaster.set(
     new THREE.Vector3().addVectors(
       camera.position,
-      new THREE.Vector3(2.999999999, 0, 2.999999999)
+      new THREE.Vector3(2.499999999, 0, 2.499999999)
     ),
     new THREE.Vector3(0, -1, 0)
   );
@@ -368,7 +387,7 @@ function process(dt) {
   playerFloorcaster.set(
     new THREE.Vector3().addVectors(
       camera.position,
-      new THREE.Vector3(-2.999999999, 0, 2.999999999)
+      new THREE.Vector3(-2.499999999, 0, 2.499999999)
     ),
     new THREE.Vector3(0, -1, 0)
   );
@@ -379,7 +398,7 @@ function process(dt) {
   playerFloorcaster.set(
     new THREE.Vector3().addVectors(
       camera.position,
-      new THREE.Vector3(2.999999999, 0, -2.999999999)
+      new THREE.Vector3(2.499999999, 0, -2.499999999)
     ),
     new THREE.Vector3(0, -1, 0)
   );
@@ -390,7 +409,7 @@ function process(dt) {
   playerFloorcaster.set(
     new THREE.Vector3().addVectors(
       camera.position,
-      new THREE.Vector3(-2.999999999, 0, -2.999999999)
+      new THREE.Vector3(-2.499999999, 0, -2.499999999)
     ),
     new THREE.Vector3(0, -1, 0)
   );
@@ -400,19 +419,24 @@ function process(dt) {
   // (make sure the intersection point is grid-aligned)... not a nice solution
   intersects = [...intersects].filter((i) => i.point.y % 10 == 0);
 
-  if (intersects.length && yVelocity < 0) {
+  // check if player is in the air
+  inAir = !intersects.length;
+
+  if (intersects.length && velocity.y < 0) {
     const dist = Math.min(...intersects.map((i) => i.distance));
     camera.position.add(new THREE.Vector3(0, 18 - dist, 0));
 
     // reset velocity or start a jump
-    yVelocity =
+    velocity.y =
       inputs.space &&
-      world.isEmpty(
-        Utils.positionToWorldIndices(camera.position).add(
-          new THREE.Vector3(0, 1, 0)
+      !playerBox.collideList(
+        world.getCollisionMask(
+          new THREE.Vector3()
+            .copy(camera.position)
+            .add(new THREE.Vector3(0, 10, 0))
         )
       )
-        ? 85
+        ? 83
         : 0;
   }
 }
@@ -579,7 +603,7 @@ function onpointerdown(e) {
         );
         const playerBox = new Utils.Box2D(
           new THREE.Vector2(camera.position.x, camera.position.z),
-          6
+          5
         );
         const box = new Utils.Box2D(
           new THREE.Vector2(blockPosition.x, blockPosition.z),
