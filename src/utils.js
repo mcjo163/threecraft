@@ -1,5 +1,5 @@
 /**
- * Utility functions
+ * Utility functions and classes
  * Micah Johnson
  */
 "use strict";

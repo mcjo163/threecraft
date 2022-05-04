@@ -8,27 +8,43 @@ import * as THREE from "../build/three.module.js";
 const loader = new THREE.TextureLoader();
 
 class Block {
-  constructor(textureName, shiny) {
-    // resource location depends on where this is running...
-    if (document.URL.includes("github")) {
-      /** @type {THREE.Texture} */
-      this.texture = loader.load(
-        `${document.URL}/textures/${textureName}.png`
-      );
-      
-    } else {
-      this.texture = loader.load(`../textures/${textureName}.png`);
-    }
+  constructor(shiny, ...textureNames) {
 
-    this.texture.magFilter = THREE.NearestFilter;
-
-    /** @type {THREE.Material} */
-    this.material = new (
-      shiny ? THREE.MeshPhongMaterial : THREE.MeshLambertMaterial
-    )({ map: this.texture });
+    this.materials = Block.getMaterials(shiny, textureNames);
 
     /** @type {THREE.BoxGeometry} */
     this.geometry = new THREE.BoxGeometry(10, 10, 10);
+  }
+
+  /**
+   * Creates an array of references to materials
+   * @param {string[]} textureNames texture names for block
+   * @returns {THREE.Material[]} materials
+   */
+  static getMaterials(shiny, textureNames) {
+    const uniqueNames = new Set(textureNames);
+    let materialLookup = {};
+    for (const n of uniqueNames) {
+      let texture;
+      // resource location depends on where this is running...
+      if (document.URL.includes("github")) {
+        texture = loader.load(`${document.URL}/textures/${n}.png`);
+      } else {
+        texture = loader.load(`../textures/${n}.png`);
+      }
+
+      // removes texture blur
+      texture.magFilter = THREE.NearestFilter;
+
+      // create material
+      materialLookup[n] = new (
+        shiny ? THREE.MeshPhongMaterial : THREE.MeshLambertMaterial
+      )({
+        map: texture,
+      });
+
+    }
+    return textureNames.map(n => materialLookup[n]);
   }
 
   /**
@@ -37,7 +53,11 @@ class Block {
    * @returns {THREE.Mesh} the new instance
    */
   create(position) {
-    const m = new THREE.Mesh(this.geometry, this.material);
+    const m = new THREE.Mesh(
+      this.geometry,
+      this.materials.length > 1 ? this.materials : this.materials[0]
+    );
+
     m.receiveShadow = true;
     if (position) m.position.copy(position);
     return m;
@@ -48,16 +68,29 @@ class Block {
    * @returns {THREE.Mesh}
    */
   createHudItem() {
-    return new THREE.Mesh(this.geometry, this.material);
+    return new THREE.Mesh(
+      this.geometry,
+      this.materials.length > 1 ? this.materials : this.materials[0]
+    );
   }
 }
 
 export const BLOCKS = [
   undefined,
-  new Block("stone", false),
-  new Block("plank", false),
-  new Block("cobblestone", false),
-  new Block("bricks", false),
-  new Block("iron", true),
-  new Block("gold", true),
+  new Block(
+    false,
+    "grass_side",
+    "grass_side",
+    "grass",
+    "dirt",
+    "grass_side",
+    "grass_side"
+  ),
+  new Block(false, "dirt"),
+  new Block(false, "stone"),
+  new Block(false, "plank"),
+  new Block(false, "cobblestone"),
+  new Block(false, "bricks"),
+  new Block(true, "iron"),
+  new Block(true, "gold"),
 ];

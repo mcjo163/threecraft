@@ -15,8 +15,7 @@ export class World {
    */
   constructor(scene, blocks) {
     this.scene = scene;
-    // if block template is given, create the necessary blocks
-    // and use them as the world blockdata.
+    // populate the blockdata array
     for (let y = 0; y < blocks.length; y++) {
       for (let x = 0; x < blocks[y].length; x++) {
         for (let z = 0; z < blocks[y][x].length; z++) {
@@ -135,6 +134,7 @@ export class World {
     const normals = [];
     const indices = [];
 
+    // any block with an exposed neighbor needs a face by that neighbor
     for (let y = 0; y < this.blockdata.length; y++) {
       for (let x = 0; x < this.blockdata[y].length; x++) {
         for (let z = 0; z < this.blockdata[y][x].length; z++) {
@@ -306,6 +306,7 @@ export class World {
   }
 }
 
+// static constant for geometry generation
 World.faces = [
   {
     // left

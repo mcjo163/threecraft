@@ -8,6 +8,7 @@ import { BLOCKS } from "./blocks.js";
 import * as Utils from "./utils.js";
 import { World } from "./world.js";
 
+// input object for controls
 let inputs = {
   left: false,
   right: false,
@@ -16,13 +17,15 @@ let inputs = {
   space: false,
 };
 
+// globals
 let canvasFocused = false;
-let w, h;
 let selectedBlock = 1;
-
 let velocity = new THREE.Vector3();
 let inAir = false;
+let w, h;
 
+// the @type comments tell VSCode what type to use for 
+// intellisense.
 /** @type {HTMLCanvasElement} */
 let canvas;
 
@@ -68,6 +71,7 @@ let t;
 /** @type {THREE.Mesh[]} */
 let hudItems;
 
+// set up the scene and start the game loop
 init();
 animate();
 
@@ -77,12 +81,14 @@ animate();
 function init() {
   canvas = document.querySelector("#c");
 
+  // initialize camera and scene
   camera = new THREE.PerspectiveCamera(80, 16 / 9, 1, 10000);
   camera.position.y = 18;
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87ceeb);
 
+  // scene lighting
   scene.add(new THREE.AmbientLight(0xffffff, 0.6));
   {
     const light = new THREE.DirectionalLight(0xffffff, 0.7);
@@ -108,6 +114,7 @@ function init() {
     scene.add(sun);
   }
 
+  // set up wireframe box
   const box = new THREE.BoxGeometry(10, 10, 10);
   const edges = new THREE.EdgesGeometry(box);
   wireframeOutline = new THREE.LineSegments(
@@ -116,21 +123,25 @@ function init() {
   );
   scene.add(wireframeOutline);
 
+  // set up renderer
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  // renderer.setPixelRatio(window.devicePixelRatio);
   [w, h] = Utils.getMaximalBounds(window.innerWidth, window.innerHeight);
   renderer.autoClear = false;
   renderer.setSize(w, h);
   renderer.shadowMap.enabled = true;
 
+  // set up block placement raycaster
   raycaster = new THREE.Raycaster();
   raycaster.far = 60;
 
+  // set up floor raycaster
   playerFloorcaster = new THREE.Raycaster();
   playerFloorcaster.far = 18;
 
+  // create the world
   world = new World(scene, basicWorld());
 
+  // initialize the HUD
   resetHud();
 
   // attach event handlers
@@ -139,6 +150,7 @@ function init() {
   document.addEventListener("pointerlockchange", onpointerlockchange);
 }
 
+// creates a basic world with stone below y=20
 function basicWorld() {
   const blocks = [];
   for (let y = 0; y < 40; y++) {
@@ -146,7 +158,14 @@ function basicWorld() {
     for (let x = 0; x < 40; x++) {
       const row = [];
       for (let z = 0; z < 40; z++) {
-        row.push(y <= 19 ? 1 : 0);
+        if (y == 19)
+          row.push(1);
+        else if (13 <= y && y < 19)
+          row.push(2);
+        else if (y < 13)
+          row.push(3);
+        else
+          row.push(0);
       }
       layer.push(row);
     }
@@ -156,6 +175,7 @@ function basicWorld() {
 }
 
 function resetHud() {
+  // recreating the canvas, so remove it if it is in the DOM
   if (hudCanvas) hudCanvas.remove();
 
   hudCanvas = document.createElement("canvas");
@@ -163,6 +183,7 @@ function resetHud() {
   hud = hudCanvas.getContext("2d");
   hud.font = "28px consolas";
 
+  // HUD rendering camera
   hudCamera = new THREE.OrthographicCamera(
     -w / 2,
     w / 2,
@@ -181,6 +202,7 @@ function resetHud() {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
   hudScene.add(m);
 
+  // HUD scene lighting
   {
     const light = new THREE.DirectionalLight(0xffffff, 1.0);
     light.position.set(100, 100, 100);
@@ -189,6 +211,7 @@ function resetHud() {
     hudScene.add(new THREE.AmbientLight(0xffffff, 0.5));
   }
 
+  // set up HUD blocks
   let i = w / 20;
   hudItems = [undefined];
   for (const b of BLOCKS)
@@ -228,6 +251,7 @@ function updateHud(dt) {
     // spin the currently selected block's HUD item
     hudItems[selectedBlock].rotation.y += (Math.PI / 2) * dt;
   }
+
   // otherwise, draw "click to play" message
   else {
     hud.fillStyle = "rgba(0, 0, 0, 0.6)";
@@ -279,10 +303,11 @@ function process(dt) {
     forwardDir.angle() + Math.PI / 2
   );
 
+  // extract x and z components of the velocity
   let newVel = new THREE.Vector2(velocity.x, velocity.z);
   const acc = inAir ? 150 : 400;
 
-  // apply acceleration
+  // apply acceleration/deceleration to extracted velocity components
   if (inputVector.length()) {
     newVel.addScaledVector(inputVector, acc * dt);
   } else {
@@ -352,6 +377,7 @@ function process(dt) {
   }
 
   // cap velocity according to the dot product with the desired velocity
+  // (ensures proper wall-sliding speed)
   if (inputVector.length() && newVel.length())
     newVel.clampLength(0, (50 * newVel.dot(inputVector)) / newVel.length());
 
@@ -422,11 +448,14 @@ function process(dt) {
   // check if player is in the air
   inAir = !intersects.length;
 
+  // if colliding with the floor...
   if (intersects.length && velocity.y < 0) {
     const dist = Math.min(...intersects.map((i) => i.distance));
     camera.position.add(new THREE.Vector3(0, 18 - dist, 0));
 
     // reset velocity or start a jump
+    // (start a jump if space is pressed and player
+    // will not collide with a block above it)
     velocity.y =
       inputs.space &&
       !playerBox.collideList(
@@ -445,12 +474,13 @@ function animate(time) {
   if (!t) t = time;
   const dt = time - t;
 
+  // keep 60fps
   if (dt > 1000 / 60) {
     if (canvasFocused) process(dt / 1000);
     render(dt / 1000);
     t = time;
   }
-
+  
   requestAnimationFrame(animate);
 }
 
@@ -460,6 +490,7 @@ function updateWireframeOutline() {
     world.nearby(camera.position, 6),
     false
   );
+  // update the wireframe's position/visibility as needed
   if (intersects.length) {
     const [intersect, ..._] = intersects;
     wireframeOutline.position.copy(intersect.object.position);
@@ -565,6 +596,7 @@ function onmousemove(e) {
   const euler = new THREE.Euler(0, 0, 0, "YXZ");
   euler.setFromQuaternion(camera.quaternion);
 
+  // get rotation values from mouse movement
   euler.x -= (e.movementY * Math.PI) / 2400;
   euler.y -= (e.movementX * Math.PI) / 2400;
 
@@ -626,6 +658,7 @@ function onpointerdown(e) {
  * @param {WheelEvent} e event
  */
 function onwheel(e) {
+  // update selected block and HUD item sizes
   if (e.deltaY != 0) {
     const dir = e.deltaY / Math.abs(e.deltaY);
     hudItems[selectedBlock].rotation.y = Math.PI / 4;
