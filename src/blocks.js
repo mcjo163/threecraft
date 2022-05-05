@@ -9,7 +9,6 @@ const loader = new THREE.TextureLoader();
 
 class Block {
   constructor(shiny, ...textureNames) {
-
     this.materials = Block.getMaterials(shiny, textureNames);
 
     /** @type {THREE.BoxGeometry} */
@@ -42,9 +41,8 @@ class Block {
       )({
         map: texture,
       });
-
     }
-    return textureNames.map(n => materialLookup[n]);
+    return textureNames.map((n) => materialLookup[n]);
   }
 
   /**
@@ -88,6 +86,8 @@ export const BLOCKS = [
   ),
   new Block(false, "dirt"),
   new Block(false, "stone"),
+  new Block(false, "log", "log", "log_top", "log_top", "log", "log"),
+  new Block(false, "leaves"),
   new Block(false, "plank"),
   new Block(false, "cobblestone"),
   new Block(false, "bricks"),

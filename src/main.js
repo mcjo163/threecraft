@@ -7,6 +7,7 @@ import * as THREE from "../build/three.module.js";
 import { BLOCKS } from "./blocks.js";
 import * as Utils from "./utils.js";
 import { World } from "./world.js";
+import * as Gen from "./worldgen.js";
 
 // input object for controls
 let inputs = {
@@ -24,7 +25,7 @@ let velocity = new THREE.Vector3();
 let inAir = false;
 let w, h;
 
-// the @type comments tell VSCode what type to use for 
+// the @type comments tell VSCode what type to use for
 // intellisense.
 /** @type {HTMLCanvasElement} */
 let canvas;
@@ -139,7 +140,7 @@ function init() {
   playerFloorcaster.far = 18;
 
   // create the world
-  world = new World(scene, basicWorld());
+  world = new World(scene, Gen.noiseWorld());
 
   // initialize the HUD
   resetHud();
@@ -148,30 +149,6 @@ function init() {
   window.addEventListener("resize", onresize);
   canvas.addEventListener("click", canvas.requestPointerLock);
   document.addEventListener("pointerlockchange", onpointerlockchange);
-}
-
-// creates a basic world with stone below y=20
-function basicWorld() {
-  const blocks = [];
-  for (let y = 0; y < 40; y++) {
-    const layer = [];
-    for (let x = 0; x < 40; x++) {
-      const row = [];
-      for (let z = 0; z < 40; z++) {
-        if (y == 19)
-          row.push(1);
-        else if (13 <= y && y < 19)
-          row.push(2);
-        else if (y < 13)
-          row.push(3);
-        else
-          row.push(0);
-      }
-      layer.push(row);
-    }
-    blocks.push(layer);
-  }
-  return blocks;
 }
 
 function resetHud() {
@@ -446,13 +423,17 @@ function process(dt) {
   intersects = [...intersects].filter((i) => i.point.y % 10 == 0);
 
   // check if player is in the air
-  inAir = !intersects.length;
+  inAir = !intersects.length && camera.position.y > -182;
 
   // if colliding with the floor...
-  if (intersects.length && velocity.y < 0) {
-    const dist = Math.min(...intersects.map((i) => i.distance));
-    camera.position.add(new THREE.Vector3(0, 18 - dist, 0));
-
+  if (!inAir && velocity.y < 0) {
+    if (camera.position.y > -182) {
+      const dist = Math.min(...intersects.map((i) => i.distance));
+      camera.position.add(new THREE.Vector3(0, 18 - dist, 0));
+    } else {
+      camera.position.y = -182;
+    }
+    
     // reset velocity or start a jump
     // (start a jump if space is pressed and player
     // will not collide with a block above it)
@@ -480,7 +461,7 @@ function animate(time) {
     render(dt / 1000);
     t = time;
   }
-  
+
   requestAnimationFrame(animate);
 }
 
@@ -664,9 +645,9 @@ function onwheel(e) {
     hudItems[selectedBlock].rotation.y = Math.PI / 4;
     hudItems[selectedBlock].scale.set(w / 400, w / 400, w / 400);
     selectedBlock =
-    THREE.MathUtils.euclideanModulo(
-      selectedBlock + dir - 1,
-      BLOCKS.length - 1
+      THREE.MathUtils.euclideanModulo(
+        selectedBlock + dir - 1,
+        BLOCKS.length - 1
       ) + 1;
     hudItems[selectedBlock].scale.set(w / 300, w / 300, w / 300);
   }
